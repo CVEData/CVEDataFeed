@@ -1,6 +1,6 @@
 # CVEDataFeed
 
-CVEDataFeed is a Python tool for converting and updating CVE data from [NVD](https://nvd.nist.gov/) to mongodb. This is also a backend tool for the [CVEData](https://cvedata.com) site which is an alterntive for the CVEDetails.com.
+CVEDataFeed is a Python tool for converting and updating CVE data from [NVD](https://nvd.nist.gov/) to mongodb. This is also a backend tool for the [CVEData](https://cvedata.com) site which is an alternative for the CVEDetails.com.
 
 ## Features
 1. Converting data from [NVD](https://nvd.nist.gov/) json file to mongodb, include CVEs information, vendors, products and versions affected.
@@ -23,9 +23,9 @@ pip3 install -r requirements.txt
 ```
 
 3. Set environment variables
-(Require)**MONGODB_URI** for the mongo database information (example: mongodb://user:paSSw0rd@exampleserver.com/cvedata?retryWrites=true)
-(Option)**LOG_LEVEL** for the log output option, include ERROR, DEBUG or INFO. If not set, the default value is INFO.
-(Option)**LOG_FILE** for the log file option, include True or False. If set True, all output will write to the debug.log. If you not set, the default value is False.
+* (Require) **MONGODB_URI** for the mongo database information (example: mongodb://user:paSSw0rd@exampleserver.com/cvedata?retryWrites=true)
+* (Option) **LOG_LEVEL** for the log output option, include ERROR, DEBUG or INFO. If not set, the default value is INFO.
+* (Option) **LOG_FILE** for the log file option, include True or False. If set True, all output will write to the debug.log. If you not set, the default value is False.
 ```bash
 export MONGODB_URI='mongodb://user:paSSw0rd@exampleserver.com/cvedata?retryWrites=true'
 export LOG_LEVEL='INFO'
@@ -63,7 +63,7 @@ python3 cvedatafeed.py update
 python3 cvedatafeed.py updatestat
 ```
 
-*For keeping update and updatestat, you can use [Heroku](https://devcenter.heroku.com/articles/scheduler) or [Google Cloud Function](https://cloud.google.com/scheduler/docs/tut-pub-sub) with already supported file (include herokuscheduler.py and main.py)*
+*For keeping update and updatestat, you can use [Heroku](https://devcenter.heroku.com/articles/scheduler) or [Google Cloud Function](https://cloud.google.com/scheduler/docs/tut-pub-sub) with already supported file (included herokuscheduler.py and main.py)*
 
 ## Contributing
 For this project to run in the long term, please join us, any pull requests are welcome. For big changes, first open an issue to discuss what you want to change. 
