@@ -1,0 +1,9 @@
+# Environments
+.env/
+.venv/
+# vscode
+.vscode/
+# debug file
+debug.log
+cvedownload/
+updatedownload/
