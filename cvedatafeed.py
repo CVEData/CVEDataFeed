@@ -16,6 +16,7 @@ from threading import Thread
 import threading
 import _thread
 import base64
+import traceback
 
 app = Flask(__name__)
 app.config["MONGO_URI"] = os.environ.get('MONGODB_URI', "mongodb://127.0.0.1:27017/cvedata")
@@ -70,6 +71,15 @@ def getStatistic(statname):
 		return "0"
 	else:
 		return result['value']
+
+def getCveList(nameid):
+	findrecord = {}
+	findrecord['nameid'] = nameid
+	result = mongo.db.cvelists.find_one(findrecord)
+	if result == None:
+		return "0"
+	else:
+		return result['cves']
 
 def updateVulTypeCollection(cveid, vultype):
 	try:
@@ -219,7 +229,7 @@ def addCveidtoVersion(versionstr, jsoncve):
 	findrecord = {}
 	findrecord['versionid'] = versionstr
 	if mongo.db.versions.count_documents(findrecord) == 0:
-		findrecord['cves'] = [Cveid]
+		#findrecord['cves'] = [Cveid]
 		findrecord['numberofcve'] = 1
 		keyscore = str(int(jsoncve["baseScore"]))
 		findrecord['scorestat'] = {}
@@ -228,17 +238,28 @@ def addCveidtoVersion(versionstr, jsoncve):
 		newstat = getNewVultypeStat("add", [], jsoncve)
 		findrecord['vulstat'] = newstat
 		mongo.db.versions.insert_one(findrecord)
+
+		findlist = {}
+		findlist["nameid"] = versionstr
+		newlist = { "$set": { "cves": [Cveid] } }
+		mongo.db.cvelists.update_one(findlist, newlist, upsert=True)
 	else:
 		cursor = mongo.db.versions.find_one(findrecord)
 		newscore = getNewScoreAvg("add", cursor["scorestat"], cursor["avgscore"], cursor["numberofcve"], jsoncve)
 		newstat = getNewVultypeStat("add", cursor["vulstat"], jsoncve)
 
 		newvalues ={}
-		newvalues["$addToSet"] = { "cves": Cveid }
+		#newvalues["$addToSet"] = { "cves": Cveid }
 		newvalues["$inc"] = { "numberofcve": 1 }
 		setstat = { "vulstat": newstat }
 		newvalues["$set"] = {**newscore, **setstat}
 		mongo.db.versions.update_one(findrecord, newvalues)
+
+		newlist = {}
+		newlist["$addToSet"] = { "cves": Cveid }
+		findlist = {}
+		findlist["nameid"] = versionstr
+		mongo.db.cvelists.update_one(findlist, newlist)
 
 def delCveidfromVersion(versionstr, jsoncve):
 	Cveid = jsoncve["CVEID"]
@@ -246,25 +267,31 @@ def delCveidfromVersion(versionstr, jsoncve):
 	findrecord['versionid'] = versionstr
 	cursor = mongo.db.versions.find_one(findrecord)
 	if cursor != None:
-		currentlst = cursor['cves']
-		newlst = list(set(currentlst) - set([Cveid]))
 		newscore = getNewScoreAvg("del", cursor["scorestat"], cursor["avgscore"], cursor["numberofcve"], jsoncve)
 		newstat = getNewVultypeStat("del", cursor["vulstat"], jsoncve)
 
 		newvalues ={}
 		newvalues["$inc"] = { "numberofcve": -1 }
 		setstat = { "vulstat": newstat }
-		setcve = { "cves": newlst }
-		newvalues["$set"] = {**newscore, **setstat, **setcve}
+		#setcve = { "cves": newlst }
+		#newvalues["$set"] = {**newscore, **setstat, **setcve}
+		newvalues["$set"] = {**newscore, **setstat}
 		mongo.db.versions.update_one(findrecord, newvalues)
 
+		currentlst = getCveList(versionstr)
+		newlst = list(set(currentlst) - set([Cveid]))
+		newlist = {}
+		newlist["$set"] = { "cves": newlst }
+		findlist = {}
+		findlist["nameid"] = versionstr
+		mongo.db.cvelists.update_one(findlist, newlist)
 
 def addCveidtoProduct(productstr, versionstr, jsoncve):
 	Cveid = jsoncve["CVEID"]
 	findrecord = {}
 	findrecord['productid'] = productstr
 	if mongo.db.products.count_documents(findrecord) == 0:
-		findrecord['cves'] = [Cveid]
+		#findrecord['cves'] = [Cveid]
 		findrecord['versions'] = [versionstr]
 		findrecord['numberofcve'] = 1
 		keyscore = str(int(jsoncve["baseScore"]))
@@ -274,19 +301,31 @@ def addCveidtoProduct(productstr, versionstr, jsoncve):
 		newstat = getNewVultypeStat("add", [], jsoncve)
 		findrecord['vulstat'] = newstat
 		mongo.db.products.insert_one(findrecord)
+
+		findlist = {}
+		findlist["nameid"] = productstr
+		newlist = { "$set": { "cves": [Cveid] } }
+		mongo.db.cvelists.update_one(findlist, newlist, upsert=True)
 	else:
 		cursor = mongo.db.products.find_one(findrecord)
 		newscore = getNewScoreAvg("add", cursor["scorestat"], cursor["avgscore"], cursor["numberofcve"], jsoncve)
 		newstat = getNewVultypeStat("add", cursor["vulstat"], jsoncve)
 
 		newvalues ={}
-		setcve = { "cves": Cveid }
+		#setcve = { "cves": Cveid }
 		setversion = { "versions": versionstr }
-		newvalues["$addToSet"] = {**setcve, **setversion}
+		#newvalues["$addToSet"] = {**setcve, **setversion}
+		newvalues["$addToSet"] = {**setversion}
 		newvalues["$inc"] = { "numberofcve": 1 }
 		setstat = { "vulstat": newstat }
 		newvalues["$set"] = {**newscore, **setstat}
 		mongo.db.products.update_one(findrecord, newvalues)
+
+		newlist = {}
+		newlist["$addToSet"] = { "cves": Cveid }
+		findlist = {}
+		findlist["nameid"] = productstr
+		mongo.db.cvelists.update_one(findlist, newlist)
 
 def delCveidfromProduct(productstr, jsoncve):
 	Cveid = jsoncve["CVEID"]
@@ -294,24 +333,31 @@ def delCveidfromProduct(productstr, jsoncve):
 	findrecord['productid'] = productstr
 	cursor = mongo.db.products.find_one(findrecord)
 	if cursor != None:
-		currentlst = cursor['cves']
-		newlst = list(set(currentlst) - set([Cveid]))
 		newscore = getNewScoreAvg("del", cursor["scorestat"], cursor["avgscore"], cursor["numberofcve"], jsoncve)
 		newstat = getNewVultypeStat("del", cursor["vulstat"], jsoncve)
 
 		newvalues ={}
 		newvalues["$inc"] = { "numberofcve": -1 }
 		setstat = { "vulstat": newstat }
-		setcve = { "cves": newlst }
-		newvalues["$set"] = {**newscore, **setstat, **setcve}
+		#setcve = { "cves": newlst }
+		#newvalues["$set"] = {**newscore, **setstat, **setcve}
+		newvalues["$set"] = {**newscore, **setstat}
 		mongo.db.products.update_one(findrecord, newvalues)
+
+		currentlst = getCveList(productstr)
+		newlst = list(set(currentlst) - set([Cveid]))
+		newlist = {}
+		newlist["$set"] = { "cves": newlst }
+		findlist = {}
+		findlist["nameid"] = productstr
+		mongo.db.cvelists.update_one(findlist, newlist)
 
 def addCveidtoVendor(vendorstr, productstr, jsoncve):
 	Cveid = jsoncve["CVEID"]
 	findrecord = {}
 	findrecord['vendorid'] = vendorstr
 	if mongo.db.vendors.count_documents(findrecord) == 0:
-		findrecord['cves'] = [Cveid]
+		#findrecord['cves'] = [Cveid]
 		findrecord['products'] = [productstr]
 		findrecord['numberofcve'] = 1
 		keyscore = str(int(jsoncve["baseScore"]))
@@ -321,19 +367,30 @@ def addCveidtoVendor(vendorstr, productstr, jsoncve):
 		newstat = getNewVultypeStat("add", [], jsoncve)
 		findrecord['vulstat'] = newstat
 		mongo.db.vendors.insert_one(findrecord)
+
+		findlist = {}
+		findlist["nameid"] = vendorstr
+		newlist = { "$set": { "cves": [Cveid] } }
+		mongo.db.cvelists.update_one(findlist, newlist, upsert=True)
 	else:
 		cursor = mongo.db.vendors.find_one(findrecord)
 		newscore = getNewScoreAvg("add", cursor["scorestat"], cursor["avgscore"], cursor["numberofcve"], jsoncve)
 		newstat = getNewVultypeStat("add", cursor["vulstat"], jsoncve)
 
 		newvalues ={}
-		setcve = { "cves": Cveid }
-		setproduct = { "products": productstr }
-		newvalues["$addToSet"] = {**setcve, **setproduct}
+		#newvalues["$addToSet"] = {**setcve, **setproduct}
+		newvalues["$addToSet"] = { "products": productstr }
 		newvalues["$inc"] = { "numberofcve": 1 }
 		setstat = { "vulstat": newstat }
 		newvalues["$set"] = {**newscore, **setstat}
 		mongo.db.vendors.update_one(findrecord, newvalues)
+
+		newlist = {}
+		setcve = { "cves": Cveid }
+		newlist["$addToSet"] = {**setcve}
+		findlist = {}
+		findlist["nameid"] = vendorstr
+		mongo.db.cvelists.update_one(findlist, newlist)
 
 def delCveidfromVendor(vendorstr, jsoncve):
 	Cveid = jsoncve["CVEID"]
@@ -341,17 +398,23 @@ def delCveidfromVendor(vendorstr, jsoncve):
 	findrecord['vendorid'] = vendorstr
 	cursor = mongo.db.vendors.find_one(findrecord)
 	if cursor != None:
-		currentlst = cursor['cves']
-		newlst = list(set(currentlst) - set([Cveid]))
 		newscore = getNewScoreAvg("del", cursor["scorestat"], cursor["avgscore"], cursor["numberofcve"], jsoncve)
 		newstat = getNewVultypeStat("del", cursor["vulstat"], jsoncve)
 
 		newvalues ={}
 		newvalues["$inc"] = { "numberofcve": -1 }
 		setstat = { "vulstat": newstat }
-		setcve = { "cves": newlst }
-		newvalues["$set"] = {**newscore, **setstat, **setcve}
+		#newvalues["$set"] = {**newscore, **setstat, **setcve}
+		newvalues["$set"] = {**newscore, **setstat}
 		mongo.db.vendors.update_one(findrecord, newvalues)
+
+		currentlst = getCveList(vendorstr)
+		newlst = list(set(currentlst) - set([Cveid]))
+		newlist = {}
+		newlist["$set"] = setcve = { "cves": newlst }
+		findlist = {}
+		findlist["nameid"] = vendorstr
+		mongo.db.cvelists.update_one(findlist, newlist)
 
 # recursive function
 # return list compressed CpeStr
@@ -551,6 +614,7 @@ def importCVEFromJsonfile(JsonfilePath):
 			retcount = retcount + 1
 		except Exception as e:
 			logging.error("Exception in importCVEFromJsonfile %s" % e)
+			traceback.print_exc()
 			pass
 
 	logging.info("importCVEFromJsonfile done with file %s" % JsonfilePath)
@@ -886,7 +950,7 @@ def syncvultype():
 	for vendor in vendors:
 		logging.info("Updating vendor %s" % vendor['vendorid'])
 		vendorvuls = []
-		sortedcve = vendor["cves"].copy()
+		sortedcve = vendor["cves"].copy() # outofdate struct
 		sortedcve.sort()
 		for vultype in sortedtypes:
 			vulcom = list(set(vultype["cves"]).intersection(sortedcve))
@@ -994,7 +1058,7 @@ def fixdoublerecord():
 				if not bfound:
 					vulstat.append(stat)
 			mongo.db.vendors.delete_one({"_id": vendor["_id"]})
-		newvendor["cves"] = cves
+		newvendor["cves"] = cves # outofdate struct
 		newvendor["products"] = list(set(products)) # unique
 		newvendor["scorestat"] = scorestat
 		newvendor["numberofcve"] = numberofcve
@@ -1092,7 +1156,7 @@ def fixnumbercve():
 	for vendor in vendors:
 		index = index + 1
 		logging.info("Fixing score of vendor %d %s" % (index, vendor["vendorid"]))
-		numberofcve = len(vendor["cves"])
+		numberofcve = len(vendor["cves"]) # outofdate
 		if numberofcve == 0:
 			vendor["numberofcve"] = 0
 			vendor["avgscore"] = 0
@@ -1179,7 +1243,11 @@ def updateStatistics():
 	# get all cve in top vendor
 	topcve = []
 	for vendor in topvendor:
-		topcve = topcve + vendor["cves"]
+		findrec = {}
+		findrec["nameid"] = vendor["vendorid"]
+		cvelist = mongo.db.cvelists.find_one(findrec)
+		if cvelist:
+			topcve = topcve + cvelist["cves"]
 	yearregex = "^CVE-%d-.*" % datetime.date.today().year
 	hotestcve = list(mongo.db.cves.find({"$and": [{"CVEID": {"$in": topcve}}, {"CVEID": {"$regex": yearregex}}]}).sort([("baseScore", -1), ("lastModifiedDate", -1)]).limit(10))
 	if len(hotestcve) < 10:
@@ -1190,6 +1258,65 @@ def updateStatistics():
 	saveConfigkey("laststatistic", datetime.datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
 	logging.info("updateStatistics Done")
 
+def fixcvelist():
+	logging.info("Fixing ")
+	# vendor
+	vendors = mongo.db.vendors.find({})
+	index = 0
+	alen = mongo.db.vendors.count()
+	for vendor in vendors:
+		index = index + 1
+		logging.info("Fixing cvelist of vendor %d/%d %s" % (index, alen, vendor["vendorid"]))
+		newlist = {}
+		newlist["nameid"] = vendor["vendorid"]
+		if "cves" not in vendor.keys():
+			logging.info("Pass")
+			continue
+		newlist["cves"] = vendor["cves"]
+		mongo.db.cvelists.insert_one(newlist)
+		vendor.pop("cves")
+		finditem = {}
+		finditem["vendorid"] = vendor["vendorid"]
+		mongo.db.vendors.replace_one(finditem, vendor)
+
+	# product
+	products = mongo.db.products.find({})
+	index = 0
+	alen = mongo.db.products.count()
+	for product in products:
+		index = index + 1
+		logging.info("Fixing cvelist of product %d/%d %s" % (index, alen, product["productid"]))
+		newlist = {}
+		newlist["nameid"] = product["productid"]
+		if "cves" not in product.keys():
+			logging.info("Pass")
+			continue
+		newlist["cves"] = product["cves"]
+		mongo.db.cvelists.insert_one(newlist)
+		product.pop("cves")
+		finditem = {}
+		finditem["productid"] = product["productid"]
+		mongo.db.products.replace_one(finditem, product)
+
+	# version
+	versions = mongo.db.versions.find({})
+	index = 0
+	alen = mongo.db.versions.count()
+	for version in versions:
+		index = index + 1
+		logging.info("Fixing cvelist of version %d/%d %s" % (index, alen, version["versionid"]))
+		newlist = {}
+		newlist["nameid"] = version["versionid"]
+		if "cves" not in version.keys():
+			logging.info("Pass")
+			continue
+		newlist["cves"] = version["cves"]
+		mongo.db.cvelists.insert_one(newlist)
+		version.pop("cves")
+		finditem = {}
+		finditem["versionid"] = version["versionid"]
+		mongo.db.versions.replace_one(finditem, version)
+
 def printUsage():
 	print("Usage %s <action> [option]" % sys.argv[0])
 	print("List actions:")
@@ -1197,6 +1324,8 @@ def printUsage():
 	print("+ importoffline: Import CVE from a flolder")
 	print("+ update: Update CVE From NVD")
 	print("+ updatestat: Update Statistics")
+
+#fixcvelist()
 
 if __name__ == "__main__":
 	if len(sys.argv) < 2:
